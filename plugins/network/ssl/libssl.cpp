@@ -694,8 +694,8 @@ irods::error ssl_client_start(
                     return result;
                 }
 
-                int status = SSL_connect( ssl );
-                std::string err_str = "error in SSL_connect";
+                status = SSL_connect( ssl );
+                err_str = "error in SSL_connect";
                 ssl_build_error_string( err_str );
                 if ( !( result = ASSERT_ERROR( status >= 1, SSL_HANDSHAKE_ERROR, err_str.c_str() ) ).ok() ) {
                     SSL_free( ssl );
