@@ -63,7 +63,7 @@ sslStart( rcComm_t *rcComm ) {
     }
 
     status = SSL_set_tlsext_host_name( rcComm->ssl, rcComm->host );
-    if ( status < 0 ) {
+    if ( status != 1 ) {
         sslLogError( "sslStart: error in SSL_set_tlsext_host_name" );
         SSL_free( rcComm->ssl );
         rcComm->ssl = NULL;

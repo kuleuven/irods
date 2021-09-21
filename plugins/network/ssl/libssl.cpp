@@ -688,92 +688,92 @@ irods::error ssl_client_start(
                 int status = SSL_set_tlsext_host_name( ssl, ssl_obj->host().c_str() );
                 std::string err_str = "error in SSL_set_tlsext_host_name";
                 ssl_build_error_string( err_str );
-                if ( !( result = ASSERT_ERROR( status, SSL_INIT_ERROR, err_str.c_str() ) ).ok() ) {
+                if ( !( result = ASSERT_ERROR( status == 1, SSL_INIT_ERROR, err_str.c_str() ) ).ok() ) {
+                    SSL_free( ssl );
+                    SSL_CTX_free( ctx );
+                    return result;
+                }
+
+                int status = SSL_connect( ssl );
+                std::string err_str = "error in SSL_connect";
+                ssl_build_error_string( err_str );
+                if ( !( result = ASSERT_ERROR( status >= 1, SSL_HANDSHAKE_ERROR, err_str.c_str() ) ).ok() ) {
                     SSL_free( ssl );
                     SSL_CTX_free( ctx );
                 }
                 else {
-                    int status = SSL_connect( ssl );
-                    std::string err_str = "error in SSL_connect";
+                    ssl_obj->ssl( ssl );
+                    ssl_obj->ssl_ctx( ctx );
+
+                    int status = ssl_post_connection_check( ssl, ssl_obj->host().c_str() );
+
+                    std::string err_str = "post connection certificate check failed";
                     ssl_build_error_string( err_str );
-                    if ( !( result = ASSERT_ERROR( status >= 1, SSL_HANDSHAKE_ERROR, err_str.c_str() ) ).ok() ) {
-                        SSL_free( ssl );
-                        SSL_CTX_free( ctx );
+                    if ( !( result = ASSERT_ERROR( status, SSL_CERT_ERROR, err_str.c_str() ) ).ok() ) {
+                        ssl_client_stop( _ctx, _env );
                     }
                     else {
-                        ssl_obj->ssl( ssl );
-                        ssl_obj->ssl_ctx( ctx );
-
-                        int status = ssl_post_connection_check( ssl, ssl_obj->host().c_str() );
-
-                        std::string err_str = "post connection certificate check failed";
-                        ssl_build_error_string( err_str );
-                        if ( !( result = ASSERT_ERROR( status, SSL_CERT_ERROR, err_str.c_str() ) ).ok() ) {
-                            ssl_client_stop( _ctx, _env );
-                        }
-                        else {
+                        // =-=-=-=-=-=-=-
+                        // check to see if a key has already been placed
+                        // in the property map
+                        irods::buffer_crypt::array_t key;
+                        ret = _ctx.prop_map().get< irods::buffer_crypt::array_t >( SHARED_KEY, key );
+                        if ( !ret.ok() ) {
                             // =-=-=-=-=-=-=-
-                            // check to see if a key has already been placed
-                            // in the property map
-                            irods::buffer_crypt::array_t key;
-                            ret = _ctx.prop_map().get< irods::buffer_crypt::array_t >( SHARED_KEY, key );
+                            // if no key exists then ship a new key and set the
+                            // property
+                            ret = irods::buffer_crypt::generate_key( key, _env->rodsEncryptionKeySize );
                             if ( !ret.ok() ) {
-                                // =-=-=-=-=-=-=-
-                                // if no key exists then ship a new key and set the
-                                // property
-                                ret = irods::buffer_crypt::generate_key( key, _env->rodsEncryptionKeySize );
-                                if ( !ret.ok() ) {
-                                    irods::log( PASS( ret ) );
-                                }
-
-                                ret = _ctx.prop_map().set< irods::buffer_crypt::array_t >( SHARED_KEY, key );
-                                if ( !ret.ok() ) {
-                                    irods::log( PASS( ret ) );
-                                }
+                                irods::log( PASS( ret ) );
                             }
 
-                            if ( ( result = ASSERT_ERROR( _ctx.prop_map().has_entry( SHARED_KEY ),
-                                                          -1, "irodsEncryption error. Failed to generate key." ) ).ok() ) {
-                                // =-=-=-=-=-=-=-
-                                // send a message to the agent containing the client
-                                // size encryption environment variables
-                                msgHeader_t msg_header;
-                                memset( &msg_header, 0, sizeof( msg_header ) );
-                                memcpy( msg_header.type, _env->rodsEncryptionAlgorithm, HEADER_TYPE_LEN );
-                                msg_header.msgLen   = _env->rodsEncryptionKeySize;
-                                msg_header.errorLen = _env->rodsEncryptionSaltSize;
-                                msg_header.bsLen    = _env->rodsEncryptionNumHashRounds;
+                            ret = _ctx.prop_map().set< irods::buffer_crypt::array_t >( SHARED_KEY, key );
+                            if ( !ret.ok() ) {
+                                irods::log( PASS( ret ) );
+                            }
+                        }
 
-                                // =-=-=-=-=-=-=-
-                                // error check the encryption environment
-                                if ( ( result = ASSERT_ERROR( 0 != msg_header.msgLen && 0 != msg_header.errorLen && 0 != msg_header.bsLen,
-                                                              -1, "irodsEncryption error. Key size, salt size or num hash rounds is 0." ) ).ok() ) {
+                        if ( ( result = ASSERT_ERROR( _ctx.prop_map().has_entry( SHARED_KEY ),
+                                                      -1, "irodsEncryption error. Failed to generate key." ) ).ok() ) {
+                            // =-=-=-=-=-=-=-
+                            // send a message to the agent containing the client
+                            // size encryption environment variables
+                            msgHeader_t msg_header;
+                            memset( &msg_header, 0, sizeof( msg_header ) );
+                            memcpy( msg_header.type, _env->rodsEncryptionAlgorithm, HEADER_TYPE_LEN );
+                            msg_header.msgLen   = _env->rodsEncryptionKeySize;
+                            msg_header.errorLen = _env->rodsEncryptionSaltSize;
+                            msg_header.bsLen    = _env->rodsEncryptionNumHashRounds;
 
-                                    if ( ( result = ASSERT_ERROR( EVP_get_cipherbyname( msg_header.type ), -1, "irods_encryption_algorithm \"%s\" is invalid.",
-                                                                  msg_header.type ) ).ok() ) {
+                            // =-=-=-=-=-=-=-
+                            // error check the encryption environment
+                            if ( ( result = ASSERT_ERROR( 0 != msg_header.msgLen && 0 != msg_header.errorLen && 0 != msg_header.bsLen,
+                                                          -1, "irodsEncryption error. Key size, salt size or num hash rounds is 0." ) ).ok() ) {
+
+                                if ( ( result = ASSERT_ERROR( EVP_get_cipherbyname( msg_header.type ), -1, "irods_encryption_algorithm \"%s\" is invalid.",
+                                                              msg_header.type ) ).ok() ) {
+
+                                    // =-=-=-=-=-=-=-
+                                    // use a message header to contain the encryption environment
+                                    ret = writeMsgHeader( ssl_obj, &msg_header );
+                                    if ( ( result = ASSERT_PASS( ret, "writeMsgHeader failed." ) ).ok() ) {
 
                                         // =-=-=-=-=-=-=-
-                                        // use a message header to contain the encryption environment
-                                        ret = writeMsgHeader( ssl_obj, &msg_header );
+                                        // send a message to the agent containing the shared secret
+                                        bytesBuf_t key_bbuf;
+                                        key_bbuf.len = key.size();
+                                        key_bbuf.buf = &key[0];
+                                        char msg_type[] = { "SHARED_SECRET" };
+                                        ret = sendRodsMsg( ssl_obj, msg_type, &key_bbuf, 0, 0, 0, XML_PROT );
                                         if ( ( result = ASSERT_PASS( ret, "writeMsgHeader failed." ) ).ok() ) {
 
                                             // =-=-=-=-=-=-=-
-                                            // send a message to the agent containing the shared secret
-                                            bytesBuf_t key_bbuf;
-                                            key_bbuf.len = key.size();
-                                            key_bbuf.buf = &key[0];
-                                            char msg_type[] = { "SHARED_SECRET" };
-                                            ret = sendRodsMsg( ssl_obj, msg_type, &key_bbuf, 0, 0, 0, XML_PROT );
-                                            if ( ( result = ASSERT_PASS( ret, "writeMsgHeader failed." ) ).ok() ) {
-
-                                                // =-=-=-=-=-=-=-
-                                                // set the key and env for this ssl object
-                                                ssl_obj->shared_secret( key );
-                                                ssl_obj->key_size( _env->rodsEncryptionKeySize );
-                                                ssl_obj->salt_size( _env->rodsEncryptionSaltSize );
-                                                ssl_obj->num_hash_rounds( _env->rodsEncryptionNumHashRounds );
-                                                ssl_obj->encryption_algorithm( _env->rodsEncryptionAlgorithm );
-                                            }
+                                            // set the key and env for this ssl object
+                                            ssl_obj->shared_secret( key );
+                                            ssl_obj->key_size( _env->rodsEncryptionKeySize );
+                                            ssl_obj->salt_size( _env->rodsEncryptionSaltSize );
+                                            ssl_obj->num_hash_rounds( _env->rodsEncryptionNumHashRounds );
+                                            ssl_obj->encryption_algorithm( _env->rodsEncryptionAlgorithm );
                                         }
                                     }
                                 }
