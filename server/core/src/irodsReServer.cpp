@@ -49,6 +49,12 @@
 #include <string_view>
 #include <fstream>
 
+#ifdef SYSLOG
+#ifndef windows_platform
+#include <syslog.h>
+#endif
+#endif
+
 // clang-format off
 namespace ix = irods::experimental;
 

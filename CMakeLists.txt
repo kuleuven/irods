@@ -91,6 +91,11 @@ if (IRODS_DISABLE_COMPILER_OPTIMIZATIONS)
     add_compile_options(-O0)
 endif()
 
+if (IRODS_ENABLE_SYSLOG)
+    add_compile_options(-DSYSLOG=1)
+endif()
+
+
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9)
   # Do not error on definition of implicit copy constructor for classes with a
