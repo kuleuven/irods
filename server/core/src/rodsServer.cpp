@@ -50,6 +50,12 @@
 #include <algorithm>
 #include <iterator>
 
+#ifdef SYSLOG
+#ifndef windows_platform
+#include <syslog.h>
+#endif
+#endif
+
 // clang-format off
 namespace ix   = irods::experimental;
 namespace hnc  = irods::experimental::net::hostname_cache;
