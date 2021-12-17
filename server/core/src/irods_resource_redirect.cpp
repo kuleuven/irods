@@ -443,6 +443,8 @@ namespace irods
             return SUCCESS();
         }
 
+        irods::log(LOG_ERROR, resc_hier);
+
         // =-=-=-=-=-=-=-
         // parse out the leaf resource id for redirection
         rodsLong_t resc_id = 0;
@@ -482,13 +484,16 @@ namespace irods
         hostName_t* tmp_host  = last_resc_host->hostName;
         while ( tmp_host ) {
             std::string name( tmp_host->name );
-            if ( name.find( host_name ) != std::string::npos ) {
+            irods::log(LOG_ERROR, name);
+            if ( name.compare(host_name) == 0 ) {
                 match_flg = true;
                 break;
             }
 
             tmp_host = tmp_host->next;
 
+            // Only first host counts
+            break;
         } // while tmp_host
 
         // =-=-=-=-=-=-=-
