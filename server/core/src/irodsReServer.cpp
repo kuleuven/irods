@@ -134,7 +134,7 @@ namespace {
             exec_info.reserve(number_of_columns); 
 
             for (int i = 0; i < number_of_columns; ++i) {
-                exec_info.push_back(row.get<std::string>(i, ""));
+                exec_info.push_back(row.get<nanodbc::string>(i, ""));
             }
         }
         catch (const std::exception& e) {
